@@ -76,13 +76,31 @@ for(const ev of ["pointerup","pointercancel","pointerleave"])
  document.getElementById("fire").addEventListener(ev,()=>firing=false);
 
 function shoot(){
- if(!enemies.length)return;
- let target=enemies.reduce((a,b)=>
-  Math.hypot(a.x-player.x,a.y-player.y)<
-  Math.hypot(b.x-player.x,b.y-player.y)?a:b);
- let dx=target.x-player.x,dy=target.y-player.y;
- let d=Math.hypot(dx,dy)||1;
- bullets.push({x:player.x,y:player.y,vx:dx/d*6,vy:dy/d*6});
+  if (!enemies.length) return;
+
+  let target = enemies.reduce((a, b) =>
+    Math.hypot(a.x - player.x, a.y - player.y) <
+    Math.hypot(b.x - player.x, b.y - player.y) ? a : b
+  );
+
+  let dx = target.x - player.x;
+  let dy = target.y - player.y;
+  let d = Math.hypot(dx, dy) || 1;
+  let angle = Math.atan2(dy, dx);
+
+  bullets.push({
+    x: player.x,
+    y: player.y,
+    vx: dx / d * 6,
+    vy: dy / d * 6
+  });
+
+  if (socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({
+      type: "shoot",
+      angle: angle
+    }));
+  }
 }
 let lastShot=0,lastTime=0;
 function loop(t){
@@ -150,7 +168,20 @@ function loop(t){
    ctx.fillText("PLAYER", p.x - 20, p.y - 19);
   }
  }
+// Draw bullets from online players
+for (const b of remoteBullets) {
+  b.x += b.vx;
+  b.y += b.vy;
 
+  ctx.fillStyle = "#ffcc33";
+  ctx.beginPath();
+  ctx.arc(b.x, b.y, 4, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+remoteBullets = remoteBullets.filter(
+  b => b.x >= 0 && b.x <= W && b.y >= 0 && b.y <= H
+);
  // Player
  ctx.fillStyle="#41c9ff";
  ctx.beginPath();ctx.arc(player.x,player.y,13,0,Math.PI*2);ctx.fill();
@@ -172,7 +203,7 @@ requestAnimationFrame(loop);
 
 let onlineId = null;
 let onlinePlayers = [];
-
+let remoteBullets = [];
 const socket = new WebSocket(
   "wss://nikhilbattel.onrender.com"
 );
@@ -189,7 +220,14 @@ socket.onmessage = (event) => {
       onlineId = data.id;
       onlinePlayers = data.players || [];
     }
-
+if (data.type === "shoot" && data.id !== onlineId) {
+  remoteBullets.push({
+    x: data.x,
+    y: data.y,
+    vx: Math.cos(data.angle) * 6,
+    vy: Math.sin(data.angle) * 6
+  });
+}
     if (data.type === "players") {
       onlinePlayers = data.players || [];
     }
