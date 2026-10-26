@@ -1,0 +1,159 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Nikhil Battle</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#101820;color:white;font-family:Arial;text-align:center;overflow:hidden}
+header{height:48px;background:#172b25;display:flex;align-items:center;justify-content:space-around;font-weight:bold}
+canvas{display:block;width:100%;height:calc(100dvh - 168px);background:#597b45;touch-action:none}
+.controls{height:120px;display:flex;justify-content:space-around;align-items:center;background:#17212b}
+.pad{display:grid;grid-template-columns:48px 48px 48px;grid-template-rows:40px 40px 40px;gap:2px}
+button{border:0;border-radius:10px;background:#34495e;color:white;font-size:20px;font-weight:bold;touch-action:none}
+.pad button{background:#34495e}
+#fire{background:#d83b32;border-radius:50%;width:82px;height:82px;font-size:17px}
+#status{font-size:12px;color:#c8e6c9}
+</style>
+</head>
+<body>
+<header>
+<span>⚔️ NIKHIL BATTLE</span>
+<span id="hp">❤️ 100</span>
+<span id="kills">KILLS 0</span>
+</header>
+<canvas id="game"></canvas>
+<div id="status">Move with arrows • Fire to fight</div>
+<div class="controls">
+<div class="pad">
+<div></div><button data-move="up">▲</button><div></div>
+<button data-move="left">◀</button><button data-move="down">▼</button><button data-move="right">▶</button>
+<div></div><div></div><div></div>
+</div>
+<button id="fire">FIRE 🔥</button>
+</div>
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+let W=0,H=0;
+function resize(){
+ const r=canvas.getBoundingClientRect();
+ const d=Math.min(devicePixelRatio||1,2);
+ canvas.width=Math.floor(r.width*d);
+ canvas.height=Math.floor(r.height*d);
+ W=r.width;H=r.height;
+ ctx.setTransform(d,0,0,d,0,0);
+}
+addEventListener("resize",resize);resize();
+
+const player={x:180,y:180,hp:100};
+let enemies=[],bullets=[],kills=0;
+let keys={up:false,down:false,left:false,right:false};
+let firing=false,gameOver=false;
+function spawn(){
+ enemies.push({
+ x:25+Math.random()*Math.max(1,W-50),
+ y:25+Math.random()*Math.max(1,H-50),
+ hp:2
+ });
+}
+for(let i=0;i<5;i++)spawn();
+
+document.querySelectorAll("[data-move]").forEach(b=>{
+ const k=b.dataset.move;
+ b.addEventListener("pointerdown",e=>{
+  e.preventDefault();keys[k]=true;
+ });
+ for(const ev of ["pointerup","pointercancel","pointerleave"])
+  b.addEventListener(ev,()=>keys[k]=false);
+});
+
+document.getElementById("fire").addEventListener("pointerdown",e=>{
+ e.preventDefault();firing=true;
+});
+for(const ev of ["pointerup","pointercancel","pointerleave"])
+ document.getElementById("fire").addEventListener(ev,()=>firing=false);
+
+function shoot(){
+ if(!enemies.length)return;
+ let target=enemies.reduce((a,b)=>
+  Math.hypot(a.x-player.x,a.y-player.y)<
+  Math.hypot(b.x-player.x,b.y-player.y)?a:b);
+ let dx=target.x-player.x,dy=target.y-player.y;
+ let d=Math.hypot(dx,dy)||1;
+ bullets.push({x:player.x,y:player.y,vx:dx/d*6,vy:dy/d*6});
+}
+let lastShot=0,lastTime=0;
+function loop(t){
+ const dt=Math.min((t-lastTime)/16.67||1,2);
+ lastTime=t;
+ ctx.clearRect(0,0,W,H);
+
+ // Grass and battlefield
+ ctx.fillStyle="#597b45";ctx.fillRect(0,0,W,H);
+ ctx.strokeStyle="rgba(255,255,255,.07)";
+ for(let x=0;x<W;x+=35)for(let y=0;y<H;y+=35){
+  ctx.strokeRect(x,y,35,35);
+ }
+
+ if(!gameOver){
+  let dx=(keys.right?1:0)-(keys.left?1:0);
+  let dy=(keys.down?1:0)-(keys.up?1:0);
+  let len=Math.hypot(dx,dy)||1;
+  player.x=Math.max(12,Math.min(W-12,player.x+dx/len*3*dt));
+  player.y=Math.max(12,Math.min(H-12,player.y+dy/len*3*dt));
+
+  if(firing&&t-lastShot>300){shoot();lastShot=t;}
+
+  for(const e of enemies){
+   let ex=player.x-e.x,ey=player.y-e.y;
+   let d=Math.hypot(ex,ey)||1;
+   e.x+=ex/d*.65*dt;e.y+=ey/d*.65*dt;
+   if(d<23)player.hp-=.025*dt;
+   ctx.fillStyle="#e84a4a";
+   ctx.beginPath();ctx.arc(e.x,e.y,12,0,Math.PI*2);ctx.fill();
+   ctx.fillStyle="white";ctx.font="11px Arial";
+   ctx.fillText("ENEMY",e.x-19,e.y-17);
+  }
+
+  for(const b of bullets){
+   b.x+=b.vx*dt;b.y+=b.vy*dt;
+   ctx.fillStyle="#ffe66d";ctx.beginPath();
+   ctx.arc(b.x,b.y,4,0,Math.PI*2);ctx.fill();
+   for(let i=enemies.length-1;i>=0;i--){
+    let e=enemies[i];
+    if(Math.hypot(e.x-b.x,e.y-b.y)<15){
+     e.hp--;b.x=-100;
+     if(e.hp<=0){enemies.splice(i,1);kills++;}
+     break;
+    }
+   }
+  }
+  bullets=bullets.filter(b=>b.x>=0&&b.x<=W&&b.y>=0&&b.y<=H);
+  if(enemies.length<5&&Math.random()<.012)spawn();
+  if(player.hp<=0){player.hp=0;gameOver=true;}
+ }
+
+ // Player
+ ctx.fillStyle="#41c9ff";
+ ctx.beginPath();ctx.arc(player.x,player.y,13,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle="white";ctx.font="bold 11px Arial";
+ ctx.fillText("YOU",player.x-11,player.y-19);
+ document.getElementById("hp").textContent="❤️ "+Math.ceil(player.hp);
+ document.getElementById("kills").textContent="KILLS "+kills;
+
+ if(gameOver){
+  ctx.fillStyle="rgba(0,0,0,.7)";ctx.fillRect(0,0,W,H);
+  ctx.fillStyle="white";ctx.textAlign="center";
+  ctx.font="bold 28px Arial";ctx.fillText("GAME OVER",W/2,H/2);
+  ctx.font="16px Arial";ctx.fillText("Reload to play again",W/2,H/2+30);
+  ctx.textAlign="left";
+ }
+ requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
