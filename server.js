@@ -49,11 +49,27 @@ wss.on("connection", (ws) => {
       if (!player) return;
 
       if (Number.isFinite(data.x) && Number.isFinite(data.y)) {
-        player.x = Math.max(0, Math.min(5000, data.x));
-        player.y = Math.max(0, Math.min(5000, data.y));
-      }
+  player.x = Math.max(0, Math.min(5000, data.x));
+  player.y = Math.max(0, Math.min(5000, data.y));
+}
 
-      broadcast();
+if (data.type === "shoot") {
+  const shot = {
+    type: "shoot",
+    id: id,
+    x: player.x,
+    y: player.y,
+    angle: Number.isFinite(data.angle) ? data.angle : 0
+  };
+
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify(shot));
+    }
+  });
+}
+
+broadcast();
     } catch (_) {}
   });
 
